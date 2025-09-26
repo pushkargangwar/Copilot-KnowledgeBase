@@ -1,0 +1,1156 @@
+Error Logging Best Practices -
+
+
+Centralized Error Handling: Use custom error logging objects (Flow_Error__c, Apex_Error__c).
+
+Error Object Fields: Capture Flow/Process/Class, User, Record Id, Error Message, Stack Trace, Timestamp.
+
+Correlation IDs: Track unique transaction IDs across flows, Apex, and async jobs.
+
+User-Friendly Messaging: Show safe error messages to end users, while logging technical details internally.
+
+Monitoring & Alerting: Use Platform Events or scheduled jobs to notify admins (email/Slack).
+
+Retention Policy: Archive or auto-delete logs after defined retention periods.
+ 
+
+
+Admin Best Practices
+
+App Building 
+Use good naming conventions for new objects, fields, and other metadata.(Keep it simple and match the object/field label to the API name which is also related to your business requirement.)
+Use the Schema Builder to see the relationships between objects.
+Do consider using Dynamic Forms
+Do use the ‘View Setup Audit Trail’ to see what metadata changes have taken place and by whom
+Maintain a clean data model: consistent naming, avoid duplication, document object purpose.
+Don’t add a new record type to an object unless required:
+Adding a new record type should be your last option to meet a use case.
+With Salesforce features like Dynamic Forms and Related List Filters on Page Layouts, extra Record Types become even less necessary.
+Do use field tracking on your objects to track data changes:
+Salesforce allows 20 fields to be tracked per object – so organizations should use this feature on their important fields. Note: more fields are available to be tracked, with a premium subscription to Salesforce Shield.
+Put the tracking history related list on record pages. You can also report on these field changes.     
+RBAC & Security
+Use Permission Sets instead of creating multiple Profiles.
+Bundle access via Permission Set Groups for easier assignment.
+Apply the principle of least privilege — only give access users actually need.
+Don’t use roles as a proxy for job titles—use them for data access only.
+Limit manual sharing—prefer automatic sharing rules.
+Always use Field-Level Security over hiding fields via page layouts.
+Define standard roles and permission bundles as your org grows.
+Use naming conventions for permission sets: e.g., PS_Sales_Edit_Leads.
+Audit with Salesforce Optimizer and Permission Set Assignment reports.
+Apply criteria-based or owner-based sharing rules for groups needing consistent access (e.g., "Share all High-Value Accounts with Strategic Sales Team").
+Avoid manual sharing unless it's temporary or case-by-case.
+Enforce Multi-Factor Authentication (MFA)—now mandatory for all users.
+Configure Login IP Ranges and Login Hours for profiles (especially for external contractors).
+Enable Session Timeout Policies for inactive sessions.
+Use Dynamic Forms to control visibility of fields based on record data, profiles, or permission sets.
+Avoid creating multiple record types just to display different fields—use visibility rules instead.
+Automation 
+Flows 
+Use one record-triggered flow per object per event (Before/After) to avoid conflicts.
+Use subflows for reusable logic (e.g., email templates, field updates).
+Structure flows with clear naming and descriptions.
+Use Decision elements instead of multiple flows.
+Use Assignment elements to group variable changes efficiently.
+Avoid hard-coded IDs—use Custom Metadata/Labels or Get Records for dynamic referencing.
+Use Fault Paths on all DML/action elements.
+Log errors in a custom Flow Log object and notify admins.
+Use Before-Save flows for field updates (more efficient than after-save).
+Avoid unnecessary Get Records—use input variables when available.
+Use Loop batching when updating/deleting multiple records.
+Use naming conventions like RTF_Account_Update_LeadSource.
+Test in sandboxes, use Flow Debugger and Test Suites.
+Use Visual Flow Debugger for  improvements
+Utilize Flow Orchestrator with fault recovery paths
+
+
+Approval Processes
+Use Entry Criteria to limit unnecessary approvals.
+Assign Approvers dynamically (e.g., via Manager fields).
+Use Delegated Approvers for time-sensitive workflows.
+Combine with Flow for advanced routing and notifications.
+Don’t overuse—approvals add overhead; use only when accountability/audits are needed
+Notify users using email templates or Chatter.
+Use Flow Orchestration for more complex, multi-step approval journeys with error handling and branching.
+
+
+Dynamic Actions unless required:
+Use record field values or user attributes to drive visibility (e.g., show "Approve" button only for Managers).
+Keep logic centralized and documented.
+Use Dynamic Forms to create fully responsive UI experiences.
+Avoid creating multiple record types just to change actions—use dynamic actions instead.
+
+Apex Best Practices — Lead Management Use Case
+1. Bulkification
+❌ Avoid: for (Lead l : Trigger.new) query
+
+
+✅ Use Maps/Sets to process leads, e.g., group by email for deduplication.
+
+
+✅ Score calculation done in bulk: map industry → score.
+
+
+2. Governor Limits
+Limit callouts per transaction: 100/day per external service.
+
+
+Email notifications via EmailService.sendValidationEmail must be queued async.
+
+
+3. Error Handling
+Use custom exceptions: LeadValidationException, IntegrationException.
+
+
+Log to Error_Log__c or publish Platform Events on failure.
+
+
+Example:
+
+
+try {
+    validateEmail(lead);
+} catch (ValidationException e) {
+    Log.error('DUPLICATE_EMAIL', e, context);
+}
+4. Asynchronous Apex
+🚫 No callouts directly in trigger.
+
+
+✅ Offload scoring > threshold or email validation to Queueable Apex.
+
+
+Use idempotency key to avoid duplicate processing of same Lead.Id.
+
+
+5. Integration
+Use Named Credentials for email verifier (e.g., Hunter.io).
+
+
+Retry pattern: store LastCalloutStatus__c, avoid retrying failed ones within 5 min.
+
+
+6. Security
+Use Security.stripInaccessible for FLS checks on Lead.Email, Score__c.
+
+
+Always use with sharing in handlers (LeadTriggerHandler, etc).
+
+
+
+🧠 Naming & Patterns
+Item
+Format
+Example
+Class
+PascalCase
+LeadTriggerHandler
+Method
+camelCase
+applyBusinessRules()
+Constants
+UPPER_CASE
+MAX_SCORE, ERR_INVALID
+Trigger
+[Object]Trigger
+LeadTrigger
+Test Class
+[ClassName]Test
+LeadTriggerHandlerTest
+
+
+🔍 SOQL & Data Access
+SELECT Id, Email FROM Lead WHERE Email IN :emailSet LIMIT 1
+
+
+Avoid subqueries on Lead during trigger — cache related Account data instead.
+
+
+
+📦 DML & Transactions
+Use Database.insert(..., false) for partial success during batch imports.
+
+
+Use Savepoints if scoring logic involves Account/Contact updates.
+
+
+
+🛡️ Security & Sharing
+Use WITH SECURITY_ENFORCED or Security.stripInaccessible.
+
+
+Read: SELECT Email FROM Lead WITH SECURITY_ENFORCED
+
+
+Write: Security.stripInaccessible(UPDATABLE, leads).getRecords()
+
+
+
+
+Trigger Best Practices  & Patterns
+
+
+🚦 Apex Trigger Best Practices
+
+✅ 1. Use One Trigger per Object
+⦁	Always define only one trigger per object to avoid confusion and unpredictable behavior.
+
+⦁	Delegate logic to Apex handler classes to keep the trigger clean.
+
+Bad Practice:
+trigger AccountTrigger1 on Account (before insert) { ... }
+trigger AccountTrigger2 on Account (after update) { ... }
+Good Practice:
+trigger AccountTrigger on Account (before insert, after update) {
+    AccountTriggerHandler.handle(Trigger.isBefore, Trigger.isInsert, Trigger.new, Trigger.old);
+}
+✅ 2. Use a Trigger Handler Framework
+Encapsulate logic in a trigger handler class to:
+⦁	Separate logic by context (before insert, after update, etc.)
+
+⦁	Make code reusable and testable
+
+⦁	Enable conditional logic, recursion control, etc.
+
+Basic Handler Pattern:
+public class AccountTriggerHandler {
+    public static void handle(Boolean isBefore, Boolean isInsert, List<Account> newList, List<Account> oldList) {
+        if (isBefore && isInsert) {
+            beforeInsert(newList);
+        } else if (!isBefore && isInsert) {
+            afterInsert(newList);
+        }
+    }
+
+    private static void beforeInsert(List<Account> accounts) {
+        // your logic here
+    }
+
+    private static void afterInsert(List<Account> accounts) {
+        // logic
+    }
+}
+✅ 3. Bulkify Your Logic
+⦁	Always assume that the trigger may handle 200 records (batch size).
+
+⦁	Never use SOQL/DML inside a loop.
+
+⦁	Use maps and sets to process data in bulk.
+
+Anti-pattern:
+for (Account acc : Trigger.new) {
+    insert new Contact(LastName = acc.Name, AccountId = acc.Id); // DML in loop
+}
+Correct:
+List<Contact> contactsToInsert = new List<Contact>();
+for (Account acc : Trigger.new) {
+    contactsToInsert.add(new Contact(LastName = acc.Name, AccountId = acc.Id));
+}
+insert contactsToInsert;
+✅ 4. Avoid Recursion
+Triggers can fire other triggers or callouts.There are different ways to solve the recursion in the trigger.
+⦁	Use Static Boolean Variable
+Example:
+public class OpportunityTriggerHandler {
+    private static Boolean isExecuted = false;
+
+    public static void handle(List<Opportunity> opps) {
+        if (isExecuted) return;
+        isExecuted = true;
+
+        // your logic
+    }
+}
+
+ 
+⦁	Use Static Set to Store Record Id.
+ 
+⦁	Use Static Map
+ 
+⦁	Use Old Map
+Always use Old map to compare the values before executing the trigger logic. Here is example how we can compare old value to resolve the recursion in Trigger.
+ 
+
+✅ 5. Use Context Variables
+⦁	Use Trigger.isInsert, Trigger.isBefore, etc., to control execution.
+
+⦁	Avoid writing logic that runs on every trigger context unless needed.
+
+Key context variables:
+⦁	Trigger.new, Trigger.old
+
+⦁	Trigger.newMap, Trigger.oldMap
+
+⦁	Trigger.isInsert, isUpdate, isDelete, isBefore, isAfter
+
+
+✅ 6. Handle Exceptions Gracefully
+Wrap logic in try-catch blocks and log errors instead of letting the trigger fail silently.
+Best practice:
+try {
+    // logic
+} catch (Exception ex) {
+    System.debug('Trigger error: ' + ex.getMessage());
+    // optionally insert error log record
+}
+✅ 7. Use Custom Settings/Metadata for Configurations
+⦁	Avoid hardcoding IDs, values, or settings inside triggers.
+
+⦁	Use Custom Metadata Types or Custom Settings for flexible configuration.
+
+
+✅ 8. Respect FLS and Sharing Where Needed
+⦁	Triggers run in system context (ignore field-level security and sharing).
+
+⦁	Use  with sharing in handler classes if necessary.
+
+⦁	Use Schema.sObjectType.Account.fields.Name.isAccessible() to check FLS if writing reusable logic for Lightning or APIs.
+
+
+✅ 9. Write Unit Tests for Every Trigger Context
+⦁	Cover all scenarios (before insert, after update, etc.).
+
+⦁	Assert the correct outcomes (not just coverage).
+
+⦁	Use Test.startTest() and Test.stopTest() to isolate and test behavior.
+
+⦁	Include bulk test cases (more than 1 record).
+
+
+🏗️ Trigger Architecture & Patterns
+
+🔄 1. Trigger Framework Pattern (Modular Handler)
+trigger ContactTrigger on Contact (before insert, before update, after insert, after update) {
+    ContactTriggerHandler.run(Trigger.isBefore, Trigger.isInsert, Trigger.new, Trigger.old);
+}
+⦁	Allows centralized control.
+
+⦁	Easier to debug, scale, and test.
+
+⦁	You can extend this into a framework like Kevin O’Hara's Trigger Framework, or custom-built.
+
+
+🧱 2. Domain Layer Pattern
+Advanced orgs may use a Domain layer, separating business logic further.
+trigger AccountTrigger on Account (before insert, after update) {
+    AccountDomain.onBeforeInsert(Trigger.new);
+    AccountDomain.onAfterUpdate(Trigger.oldMap, Trigger.newMap);
+}
+🔁 3. Event-Driven Pattern (with Platform Events or Custom Events)
+⦁	Use Platform Events for async processing of non-critical logic.
+
+⦁	You can also fire Custom Apex Events for decoupling logic.
+
+
+Testing Best Practices
+
+Testing in Salesforce is critical to ensure that customizations, automations, and code work correctly, securely, and at scale. Whether you're an admin, developer, or architect, adopting testing best practices is essential for maintaining a high-quality Salesforce org.
+
+🧪 1. Apex Unit Test Best Practices
+🚀 Code Coverage (Minimum 75% Required for Deployment)
+⦁	Aim for 90–100% coverage in real-world projects, especially for business-critical logic.
+
+⦁	Don't just cover lines — test logic paths and outcomes.
+
+✅ Best Practices:
+⦁	Use @isTest annotation to define test classes and methods.
+
+⦁	Use Test.startTest() / Test.stopTest() to measure performance and isolate logic.
+
+⦁	Always test positive, negative, and bulk scenarios.
+
+⦁	Test Governor Limits by running logic with multiple records.
+
+⦁	Use System.assert() & System. assertEquala() wisely to verify that logic behaves as expected.
+
+⦁	Create realistic test data using factory classes or setup methods.
+
+Example:
+@isTest
+private class AccountTriggerTest {
+    @isTest static void testBulkInsert() {
+        List<Account> accounts = new List<Account>();
+        for (Integer i = 0; i < 200; i++) {
+            accounts.add(new Account(Name = 'Test Acc ' + i));
+        }
+
+        Test.startTest();
+        insert accounts;
+        Test.stopTest();
+
+        System.assertEquals(200, [SELECT Count() FROM Account WHERE Name LIKE 'Test Acc%']);
+    }
+}
+🧱 2. Test Factory Pattern
+Avoid duplicating test data across classes. Use a test data factory to centralize record creation.
+public class TestDataFactory {
+    public static Account createTestAccount() {
+        return new Account(Name = 'Factory Test Acc');
+    }
+}
+In test class:
+@isTest
+static void testSomething() {
+    Account acc = TestDataFactory.createTestAccount();
+    insert acc;
+}
+🔁 3. Test Triggers, Flows, and Integrations Together
+⦁	Always write tests for any Apex code, triggers, or invocable methods used by Flows or Processes.
+
+⦁	Include Flow test suites (Summer ’24+) and Flow debugger logs to verify automation behavior.
+
+
+🛡️ 4. Security and Sharing Testing
+⦁	Use System.runAs() to simulate different user roles or profiles.
+
+⦁	Test logic under with sharing and without sharing contexts.
+
+⦁	Check FLS (Field-Level Security) using Schema.sObjectType.Account.fields.Name.isAccessible() when applicable.
+
+
+🧩 5. Flow Testing Best Practices (Admin Focus)
+Salesforce Summer ’24+ introduced:
+⦁	Flow Test Builder: create no-code test cases for Autolaunched Flows
+
+⦁	Flow Test Suites: group test cases and run them together
+
+⦁	Flow Debugging Enhancements
+
+Best Practices:
+⦁	Create test cases for every Flow variation (e.g., branch from decision element).
+
+⦁	Always test fault paths, especially when using DML or external actions.
+
+⦁	Use input variables to simulate different runtime conditions.
+
+⦁	Validate field updates, emails, and actions using assertions (e.g., check output values or logs).
+
+
+🧪 6. Integration Testing (APIs, External Systems)
+Best Practices:
+⦁	Use Mocking Classes (HttpCalloutMock) to simulate third-party integrations.
+
+⦁	Never make real callouts in unit tests (they will fail).
+
+⦁	Use Named Credentials + Custom Metadata to mock environments.
+
+
+🧠 7. Testing in CI/CD Pipelines
+⦁	Integrate unit tests and validations into your CI/CD flow (Gearset, Copado, SFDX).
+
+⦁	Use Scratch Orgs and Unlocked Packages for isolated, testable environments.
+
+⦁	Automate testing with SFDX commands:
+
+sfdx force:apex:test:run --codecoverage --resultformat human
+📊 8. Test Data Management
+⦁	Use SeeAllData=false unless absolutely necessary.
+
+⦁	Create lightweight test data—avoid hitting governor limits during setup.
+
+⦁	Clean up any inserted data, especially for reusable sandboxes or developer orgs.
+
+
+
+Integration Best Practices
+
+Integration Strategy & Architecture
+Define Patterns Clearly: Salesforce supports different integration needs. Each has trade-offs:
+
+
+Remote Call-In (Inbound) – External systems calling Salesforce APIs (REST/SOAP).
+
+
+Data Virtualization / UI Integration – Display external data in Salesforce via Salesforce Connect (OData).
+
+
+Request-Reply – Salesforce calling out to external APIs in real-time.
+
+
+Event-Driven – Use Platform Events, CDC, Outbound Messaging for decoupled, scalable async communication.
+
+
+Batch Data Sync – Scheduled ETL or Bulk API jobs.
+
+
+Guideline: Always favor event-driven / async when volumes are high or when user experience shouldn’t be blocked.
+API Usage & Performance
+
+API Selection Matrix:
+
+
+SOAP API – Strongly typed, contract-based, suited for enterprise integrations.
+
+
+REST API – Lightweight, mobile, and web-friendly.
+
+
+Bulk API 2.0 – High-volume loads (millions of records).
+
+
+Streaming API / CDC – Real-time change propagation.
+
+
+Performance Optimizations:
+
+
+Use Bulk API instead of looping DML via REST/SOAP.
+
+
+Use Composite API to reduce round-trips (up to 25 sub-requests in one call).
+
+
+Apply query optimization: SELECT only needed fields, avoid unindexed WHERE filters.
+
+
+Avoid deep recursive integrations — set limits on retries to prevent infinite loops.
+Scalability & Idempotency
+
+Design for Scale:
+
+
+Handle millions of records via async APIs (Bulk API, Platform Events).
+
+
+Use middleware (MuleSoft, Boomi, Informatica) to orchestrate large integrations.
+
+
+Idempotency:
+
+
+All API calls should be idempotent → repeated calls must not duplicate data.
+
+
+Use External IDs & UPSERT instead of Insert to prevent duplicates.
+
+
+Concurrency Handling:
+
+
+Design for parallel processing with optimistic locking.
+
+
+Consider Queueable Apex for async handling inside Salesforce.
+Security & Compliance
+
+Authentication:
+
+
+Use OAuth 2.0 (JWT or Web Server Flow).
+
+
+Configure Named Credentials to manage authentication centrally.
+
+
+Authorization:
+
+
+Use the principle of least privilege (scoped integration users, profiles, and permission sets).
+
+
+Data Protection:
+
+
+Use TLS 1.2+ for all external calls.
+
+
+Encrypt at rest (Shield Encryption) and in transit.
+
+
+Tokenize or mask PII where possible.
+
+
+Regulatory Compliance:
+
+
+Ensure GDPR/CCPA compliance by honoring consent and data residency.
+
+
+Leverage Field Audit Trail & Event Monitoring.
+Error Handling & Resilience
+
+Error Categorization:
+
+
+System Errors: Timeouts, network errors, authentication failures.
+
+
+Business Errors: Invalid data, missing mandatory fields, validation rules.
+
+
+Retry Logic:
+
+
+Implement exponential backoff retries for transient failures.
+
+
+Do NOT retry business logic errors — log and escalate instead.
+
+
+Error Logging:
+
+
+Centralize errors in custom object (Integration_Log__c).
+
+
+Include timestamp, payload, error message, stack trace, retry status.
+
+
+Integrate with external monitoring tools (Splunk, Datadog, New Relic).
+
+
+User Communication:
+
+
+Show friendly error messages in UI, while logging technical errors for admins.
+Data Management & Governance
+
+Data Mapping:
+
+
+Maintain a canonical data model → avoid system-specific duplication of meaning.
+
+
+Document field mappings in a Data Dictionary.
+
+
+Data Quality:
+
+
+Validate before integration → enforce picklist values, formats, deduplication.
+
+
+Use Duplicate Rules & Matching Rules.
+
+
+Master Data Management (MDM):
+
+
+Establish a system of record (SoR) for each entity (e.g., ERP for Finance, Salesforce for CRM).
+
+
+Salesforce shouldn’t always be the master — decide based on business domain.
+
+
+Upsert with External IDs:
+
+
+Use External IDs to uniquely identify records across systems.
+
+
+
+7. Monitoring, Observability & Alerting
+Proactive Monitoring:
+
+
+Track API usage, latency, failure rates.
+
+
+Monitor Named Credential expirations (refresh tokens).
+
+
+Event Logging:
+
+
+Use Event Monitoring for API call analysis.
+
+
+Log every transaction with correlation IDs across systems.
+
+
+Alerting:
+
+
+Configure failure notifications (Email, Slack, OpsGenie, PagerDuty).
+
+
+Use dashboards for Integration Health KPIs (Success Rate, Avg Latency, Failures by Endpoint).
+
+
+Observability:
+
+
+Implement end-to-end transaction tracing across Salesforce & external systems.
+
+
+
+8. Middleware & Orchestration
+When to use Middleware (MuleSoft, Dell Boomi, Informatica):
+
+
+Complex transformations.
+
+
+Multi-system orchestration.
+
+
+Error handling at scale.
+
+
+Hybrid integrations (cloud + on-premise).
+
+
+When to Integrate Directly:
+
+
+Simple point-to-point with lightweight requirements.
+
+
+Real-time lookups (Salesforce Connect).
+
+
+
+9. Testing & Deployment
+Testing:
+
+
+Use staging/test sandboxes that mimic production volumes.
+
+
+Perform load testing with expected peak volumes.
+
+
+Validate error handling, failover, and retries.
+
+
+Deployment:
+
+
+Use CI/CD pipelines with Git-based source control.
+
+
+Version API contracts → never break downstream consumers.
+
+
+Roll out in phases (canary deployments, feature toggles).
+
+
+
+10. Documentation & Change Management
+Maintain Integration Blueprint:
+
+
+System Landscape Diagram.
+
+
+API Contracts & Versioning.
+
+
+Error Codes & Handling Matrix.
+
+
+Data Flow Diagrams.
+
+
+Change Control:
+
+
+Document all integration touchpoints in Confluence or similar.
+
+
+Use API Gateway (Anypoint, Kong, Apigee) for traffic management, rate limiting, and analytics.
+
+
+Versioning:
+
+
+Always provide backward compatibility for APIs.
+
+
+Clearly communicate deprecation timelines.
+
+
+
+
+
+Design Patterns
+1. Singleton Pattern
+
+
+**Purpose:** Ensures only one instance of a class is created.
+**Use Case:** When you want a single, shared resource across multiple classes (like a config setting or shared cache).
+**Code Example:**
+
+public class AppConfig {
+    private static AppConfig instance;
+    public String configSetting;
+
+    private AppConfig() {
+        configSetting = 'Production';
+    }
+
+    public static AppConfig getInstance() {
+        if (instance == null) {
+            instance = new AppConfig();
+        }
+        return instance;
+    }
+}
+
+// Usage
+String setting = AppConfig.getInstance().configSetting;
+
+
+2. Factory Pattern
+
+
+**Purpose:** Creates objects without specifying the exact class type.
+**Use Case:** When you want to create objects based on dynamic input.
+**Code Example:**
+
+public interface Notification {
+    void send(String message);
+}
+
+public class EmailNotification implements Notification {
+    public void send(String message) {
+        System.debug('Sending Email: ' + message);
+    }
+}
+
+public class SMSNotification implements Notification {
+    public void send(String message) {
+        System.debug('Sending SMS: ' + message);
+    }
+}
+
+public class NotificationFactory {
+    public static Notification getNotification(String type) {
+        if (type == 'email') return new EmailNotification();
+        if (type == 'sms') return new SMSNotification();
+        return null;
+    }
+}
+
+// Usage
+Notification notify = NotificationFactory.getNotification('sms');
+notify.send('Hello from Salesforce!');
+
+
+3. Strategy Pattern
+
+**Purpose:** Selects an algorithm at runtime.
+**Use Case:** When multiple algorithms can be used interchangeably.
+**Code Example:**
+
+public interface PaymentStrategy {
+    void pay(Decimal amount);
+}
+
+public class CreditCardPayment implements PaymentStrategy {
+    public void pay(Decimal amount) {
+        System.debug('Paid via Credit Card: ' + amount);
+    }
+}
+
+public class PayPalPayment implements PaymentStrategy {
+    public void pay(Decimal amount) {
+        System.debug('Paid via PayPal: ' + amount);
+    }
+}
+
+public class PaymentContext {
+    private PaymentStrategy strategy;
+
+    public PaymentContext(PaymentStrategy strategy) {
+        this.strategy = strategy;
+    }
+
+    public void executePayment(Decimal amount) {
+        strategy.pay(amount);
+    }
+}
+
+// Usage
+PaymentContext context = new PaymentContext(new CreditCardPayment());
+context.executePayment(150.00);
+
+
+4. Template Method Pattern
+
+
+**Purpose:** Defines the skeleton of an algorithm, deferring some steps to subclasses.
+**Use Case:** When you want a fixed sequence of steps, but with variation in some steps.
+**Code Example:**
+
+public abstract class DataImporter {
+    public void importData() {
+        connect();
+        fetchData();
+        processData();
+        disconnect();
+    }
+
+    public abstract void fetchData();
+    public abstract void processData();
+
+    public void connect() {
+        System.debug('Connecting to source...');
+    }
+
+    public void disconnect() {
+        System.debug('Disconnecting from source...');
+    }
+}
+
+public class CSVImporter extends DataImporter {
+    public override void fetchData() {
+        System.debug('Fetching CSV data...');
+    }
+
+    public override void processData() {
+        System.debug('Processing CSV data...');
+    }
+}
+
+// Usage
+DataImporter importer = new CSVImporter();
+importer.importData();
+
+
+5. Unit of Work Pattern
+
+
+**Purpose:** Groups a set of operations together and commits them as a single unit.
+**Use Case:** To avoid partial updates and bulk DML problems.
+**Code Example:**
+
+public class UnitOfWork {
+    private List<Account> accountsToInsert = new List<Account>();
+    private List<Contact> contactsToInsert = new List<Contact>();
+
+    public void registerNewAccount(Account acc) {
+        accountsToInsert.add(acc);
+    }
+
+    public void registerNewContact(Contact con) {
+        contactsToInsert.add(con);
+    }
+
+    public void commit() {
+        if (!accountsToInsert.isEmpty()) insert accountsToInsert;
+        if (!contactsToInsert.isEmpty()) insert contactsToInsert;
+    }
+}
+
+// Usage
+UnitOfWork uow = new UnitOfWork();
+uow.registerNewAccount(new Account(Name='Acme Corp'));
+uow.registerNewContact(new Contact(LastName='John', Email='john@acme.com'));
+uow.commit();
+
+
+6. Trigger Handler Pattern
+
+**Purpose:** Clean and manageable logic in triggers.
+**Use Case:** When trigger logic is large or reused across events.
+**Code Example:**
+
+// Trigger
+trigger AccountTrigger on Account (before insert, after insert) {
+    AccountTriggerHandler handler = new AccountTriggerHandler();
+    if (Trigger.isBefore && Trigger.isInsert) {
+        handler.beforeInsert(Trigger.new);
+    }
+    if (Trigger.isAfter && Trigger.isInsert) {
+        handler.afterInsert(Trigger.new);
+    }
+}
+
+// Handler
+public class AccountTriggerHandler {
+    public void beforeInsert(List<Account> accounts) {
+        for (Account acc : accounts) {
+            acc.Name += ' [Handled]';
+        }
+    }
+
+    public void afterInsert(List<Account> accounts) {
+        System.debug('Inserted ' + accounts.size() + ' accounts.');
+    }
+}
+
+
+
+Lightning Web Components (LWC) Best Practices
+
+Use the wire service to handle data: The wire service is a powerful feature of LWC that allows you to handle data without writing Apex code. Use it to handle data and avoid using imperative Apex code.
+
+Use the built-in base components: Salesforce provides a set of base components that you can use to build your LWC. These components are optimized for performance and can save you time and effort.
+
+Use the Lightning Data Service (LDS) to handle data: LDS is a powerful feature of LWC that allows you to handle data without writing Apex code. Use it to handle data and avoid using imperative Apex code.
+
+Follow modular design: break components into small reusable units.
+
+Leverage wire adapters for reactive data fetching; use imperative Apex calls only when necessary.
+
+Use @api, @track, and @wire decorators appropriately to manage reactivity and data binding. Use the @track decorator to track changes to data in your LWC. This allows you to handle data changes efficiently and avoid unnecessary re-renders.
+
+Apply SLDS or Lightning Base Components for consistency; avoid hard-coded styles.
+
+Secure components with Locker Service: avoid eval(), inline JS, or DOM manipulation
+
+Use the Lightning Message Service (LMS) for cross-component communication: LMS allows you to communicate between different components in your Salesforce application. Use it to pass data between components and avoid using global variables or events.
+
+Use the LWC Dev-Tools to debug and troubleshoot: LWC Dev-Tools is a powerful browser extension that allows you to debug and troubleshoot your LWC components. Use it to debug and troubleshoot your components and avoid using console.log statements.
+
+Follow the LWC best practices and guidelines provided by Salesforce: Salesforce provides a set of best practices and guidelines for building LWC components, make sure to follow them to ensure that your components are optimized for performance and maintainability. Given below.
+
+Lightning Web Components Performance Best Practices
+
+Lightning Web Components Developer Guide
+
+
+
+Architecture & Design
+
+Component Reusability: Break larger components into smaller reusable ones.
+
+
+Use Parent-Child Communication Patterns Properly:
+
+
+Use @api for public properties.
+
+
+Use CustomEvent for child-to-parent communication.
+
+
+Use Lightning Message Service (LMS) for cross-DOM or unrelated components.
+
+
+Avoid Business Logic in LWC: Keep business logic in Apex, and let LWC focus on UI.
+
+
+Performance
+
+Lazy Loading: Load data only when needed (e.g., infinite scroll, pagination).
+
+
+Cache Data: Use @wire with refreshApex and platform cache when applicable.
+
+
+Use lightning/* Base Components: Instead of custom code for buttons, inputs, etc., prefer lightning-button, lightning-input.
+
+
+Render Conditionals Efficiently: Use if:true/if:false wisely—don’t overload the DOM.
+
+
+Avoid Nested Loops in Templates: Pre-process data in JS before rendering.
+Code Quality
+
+Naming Conventions: Use clear, consistent names for components (accountList, contactTile).
+
+
+Use Constants for Labels/Static Data: Store labels in Custom Labels, not hardcoded strings.
+
+
+SOQL & Apex Calls:
+Always call via @wire or @AuraEnabled(cacheable=true) for reads.
+
+
+Avoid unnecessary Apex calls.
+
+
+Error Handling: Show friendly error messages using lightning-toast.
+Security
+
+CRUD & FLS Enforcement: Always enforce CRUD and FLS in Apex before returning data.
+
+
+Avoid Exposing Sensitive Data: Don’t expose internal IDs or system fields unnecessarily.
+
+
+Escape Data: Use {value} (auto escapes HTML) instead of innerHTML unless absolutely necessary.
+Testing & Debugging
+
+Unit Testing: Use Jest for LWC unit tests. Cover UI logic, event handling, and edge cases.
+
+
+Mock Data for Testing: Don’t hit live org data. Use mock JSON files.
+
+
+Console Logging: Remove debug console.log() before deployment.
+
+LWC/Aura ↔ Apex Contracts
+Service methods as @AuraEnabled in service layer, not domains.
+
+
+Cacheable GET methods: @AuraEnabled(cacheable=true); no DML inside cacheable.
+
+
+Validate inputs; sanitize outputs (strip inaccessible if showing fields).
+
+
+Return typed DTOs, not sObjects, when UI needs shape stability.
+
+
+Example
+public with sharing class CaseServiceApi {
+  public class CaseDTO { @AuraEnabled public Id id; @AuraEnabled public String subject; }
+  @AuraEnabled(cacheable=true)
+  public static List<CaseDTO> listOpen(){
+    return (List<CaseDTO>) JSON.deserialize(JSON.serialize(
+      [SELECT Id, Subject FROM Case WHERE IsClosed=false WITH SECURITY_ENFORCED LIMIT 50]),
+      List<CaseDTO>.class);
+  }
+}
+Checklist
+cacheable=true for reads
+
+
+No DML in cacheable
+
+
+DTOs for UI stability
+
+
+Security enforced
+
+Anti‑Pattern Catalog (What NOT to do)
+SOQL/DML in loops; per‑row processing
+// ❌ Anti-pattern: per-record query+update in trigger
+for (Account a : Trigger.new) {
+  Contact c = [SELECT Id FROM Contact WHERE AccountId = :a.Id LIMIT 1];
+  c.Description = 'Updated';
+  update c; // DML in loop
+}
+
+// ✅ Correct: single query + grouped DML
+Map<Id,Account> byId = Trigger.newMap;
+List<Contact> toUpdate = [SELECT Id, AccountId FROM Contact WHERE AccountId IN :byId.keySet()];
+for (Contact c : toUpdate) c.Description = 'Updated';
+update toUpdate;
+
+
+Trigger business logic & callouts directly.
+❌ Business logic in trigger; multiple queries & updates mixed.
+
+
+✅ Trigger delegates; single pass over data; queries consolidated in selectors.
+
+
+
+without sharing by default.
+
+
+Dynamic SOQL from raw user input.
+❌ SELECT Id, Name, (SELECT Id FROM Contacts) FROM Account on 10k accts.
+
+
+✅ Page by Id/time window; or Batch; or limit child relationship queries by filter.
+
+
+
+Swallowing exceptions or returning null silently.
+
+
+Hard‑coding IDs, endpoints, or profile names.
+
+
+SeeAllData=true tests (except rare admin metadata tests).
+
+
+
+
