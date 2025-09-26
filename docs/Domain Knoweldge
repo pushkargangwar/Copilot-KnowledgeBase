@@ -1,0 +1,82 @@
+Salesforce Domain Knowledge Base
+
+Module: Lead Management
+Purpose: Centralized business logic, validation rules, data model, and integration patterns for the Lead object in Salesforce.
+
+
+1. Business Rules & Entity Relationships
+
+ Entities
+ Lead
+  Standard fields: `FirstName`, `LastName`, `Email`, `Company`, `LeadSource`, `Status`
+  Custom fields: 
+   `Score__c` (Number): Aggregate score used to determine lead quality.
+   `Industry_Score__c` (Formula): Formula-based score derived from Industry.
+	    `Email_Duplicate__c`: Boolean used by deduplication logic.
+Account
+  Created during lead conversion when no matching account is found.
+  Used to check related employee count (`Size__c`) during scoring.
+  Relationship: **Lead ➝ Account (1:M via Conversion)**
+
+ Business Rules
+Email Requirements:
+  Required field for all leads.
+  Email must be unique
+  For enterprise leads, email must end in `.com`
+
+Scoring Logic(Used for Qualification and Auto-Conversion):
+   `+5` if `Industry == 'Technology'`
+   `+10` if `Account.Size__c > 500` (via lookup or external enrichment)
+  `+15`: Lead Source = "Webinar" or "Event"
+  `+20`: Email validated successfully (via API callout)
+   Auto-convert lead if `Score__c > 50`
+Auto-Conversion Logic
+ If `Score__c > 50`:
+  	Trigger auto-conversion
+  	Create Contact and Opportunity along with Account (if not matched)
+  	Send notification to Sales Manager via Chatter post
+
+
+
+
+
+
+2. Common Error Messages & Troubleshooting
+	
+  Validation Errors
+
+Code
+Message
+Triggered When
+Resolution/Tips
+DUPLICATE_EMAIL
+"This email is already in use. Merge or update existing lead."
+Duplicate found on Lead.Email during insert or conversion
+Query: SELECT Id FROM Lead WHERE Email = :email LIMIT 1
+INVALID_SCORE
+"Lead score is not valid or missing."
+Score__c is null or less than 0
+Ensure scoring logic is applied before save or during batch processing
+BLOCKED_DOMAIN
+"Email domain not allowed for enterprise leads."
+Email ends in non-.com domain for enterprise campaign leads
+Validate domain in before insert trigger
+
+
+ Integration Errors
+
+
+Code
+Message
+When It Happens
+Resolution
+API_TIMEOUT
+"External email validation service timed out. Retry in 5 mins."
+Callout to Hunter.io or other enrichment service fails
+Log via System.debug, retry with exponential backoff
+MISSING_ACCOUNT_INFO
+"Could not retrieve company size data for scoring."
+Enrichment service fails to return size info
+Fallback to manual input or default scoring logic
+
+
