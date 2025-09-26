@@ -51,7 +51,7 @@ public with sharing class LeadValidationTriggerHandler {
             }
 
             // Enterprise email domain
-            if (l.Email != null && l.Email.endsWith('.com')) {
+            if (l.Email != null && l.Email.endsWith('telus.com')) {
                 score += 10;
             }
 
