@@ -76,4 +76,11 @@ public with sharing class LeadValidationTriggerHandler {
             this.errorCode = code;
         }
     }
+
+    //Write a method to get an account id as parameter and then utilize the docs/Domain knowledge.md to validate email as per the documetation
+    public static void validateLeadsFromAccount(Id accountId) {
+        List<Lead> leads = [SELECT Id, Email FROM Lead WHERE AccountId = :accountId];
+        validateLeadEmail(leads);
+    }
+
 }

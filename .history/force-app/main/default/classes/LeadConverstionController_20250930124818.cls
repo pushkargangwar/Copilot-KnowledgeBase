@@ -21,5 +21,24 @@ public class LeadConverstionController {
         Database.LeadConvertResult lcr = Database.convertLead(lc);
         System.Assert.areEqual(true, lcr.isSuccess());
     }
+    
+
+    //Validate lead, validate email and score
+    public static void validateLeadEmail(List<Lead> leadList) {
+        for (Lead l : leadList) {
+            if (l.Email == null || !l.Email.contains('@telus.com')) {
+                throw new ValidationException('INVALID_EMAIL', 'Lead email is invalid: ' + l.Email);
+            } 
+            eadValidationTriggerHandler.applyBusinessRule(leadList);
+    }
+}
+    //Custom Exception
+    public class ValidationException extends Exception {
+        public String errorCode;
+        public ValidationException(String code, String message) {
+            super(message);
+            this.errorCode = code;
+        }
+    }   
 
 }
