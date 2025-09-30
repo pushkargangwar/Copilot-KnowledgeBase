@@ -25,7 +25,7 @@ public with sharing class LeadValidationTriggerHandler {
     }
 
     /**
-     * Ppply scoring rules to leads
+     * Bulk apply scoring rules to leads
      * @param leadList List of Lead records
      */
     public static void applyBusinessRule(List<Lead> leadList) {

@@ -23,5 +23,9 @@ public class LeadConverstionController {
     }
     
 
+    //create a method to verify email on lead use LeadValidationTriggerHandler class method validateLeadEmail
+    public static void validateLead(List<Lead> leadList) {
+        
+    }   
 
 }

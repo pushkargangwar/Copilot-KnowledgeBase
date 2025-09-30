@@ -12,20 +12,9 @@ public with sharing class LeadValidationTriggerHandler {
     // ==========================
 
   
-      /**
-     *  Validate Lead emails they should contain @telus.com and should be unique
-     * @param leadList List of Lead records
-     */
-    public static void validateLeadEmail(List<Lead> leadList) {
-        for (Lead l : leadList) {
-            if (l.Email == null || !l.Email.contains('@telus.com')) {
-                throw new ValidationException('INVALID_EMAIL', 'Lead email is invalid: ' + l.Email);
-            }
-        }
-    }
 
     /**
-     * Ppply scoring rules to leads
+     * Bulk apply scoring rules to leads
      * @param leadList List of Lead records
      */
     public static void applyBusinessRule(List<Lead> leadList) {

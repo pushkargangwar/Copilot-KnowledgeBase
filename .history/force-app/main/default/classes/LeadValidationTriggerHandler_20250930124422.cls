@@ -17,15 +17,29 @@ public with sharing class LeadValidationTriggerHandler {
      * @param leadList List of Lead records
      */
     public static void validateLeadEmail(List<Lead> leadList) {
+        Set<String> emailSet = new Set<String>();
         for (Lead l : leadList) {
-            if (l.Email == null || !l.Email.contains('@telus.com')) {
-                throw new ValidationException('INVALID_EMAIL', 'Lead email is invalid: ' + l.Email);
+            if (l.Email != null) emailSet.add(l.Email);
+        }
+
+        Map<String, Lead> existingLeadsMap = new Map<String, Lead>();
+        if (!emailSet.isEmpty()) {
+            for (Lead dbLead : [SELECT Id, Email FROM Lead WHERE Email IN :emailSet]) {
+                existingLeadsMap.put(dbLead.Email, dbLead);
+            }
+        }
+
+        for (Lead l : leadList) {
+            if (l.Email == null || !Pattern.matches('^[\\w._%+-]+@[\\w.-]+\\.[a-zA-Z]{2,6}$', l.Email)) {
+                l.addError('Email format is invalid.');
+            } else if (existingLeadsMap.containsKey(l.Email)) {
+                l.addError('This email is already in use.');
             }
         }
     }
 
     /**
-     * Ppply scoring rules to leads
+     * Bulk apply scoring rules to leads
      * @param leadList List of Lead records
      */
     public static void applyBusinessRule(List<Lead> leadList) {
