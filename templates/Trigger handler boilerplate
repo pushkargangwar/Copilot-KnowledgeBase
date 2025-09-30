@@ -1,0 +1,46 @@
+public with sharing class TriggerHandlerTemplate {
+
+    private Boolean isExecuting;
+    private Integer batchSize;
+
+    public TriggerHandlerTemplate(Boolean isExecuting, Integer size) {
+        this.isExecuting = isExecuting;
+        this.batchSize = size;
+    }
+
+    // ------------------------
+    // BEFORE TRIGGERS
+    // ------------------------
+    public void beforeInsert(List<SObject> newList) {
+        // Add your logic here
+    }
+
+    public void beforeUpdate(List<SObject> oldList, List<SObject> newList,
+                             Map<Id, SObject> newMap, Map<Id, SObject> oldMap) {
+        // Add your logic here
+    }
+
+    public void beforeDelete(List<SObject> oldList, Map<Id, SObject> oldMap) {
+        // Add your logic here
+    }
+
+    // ------------------------
+    // AFTER TRIGGERS
+    // ------------------------
+    public void afterInsert(List<SObject> newList) {
+        // Add your logic here
+    }
+
+    public void afterUpdate(List<SObject> oldList, List<SObject> newList,
+                            Map<Id, SObject> newMap, Map<Id, SObject> oldMap) {
+        // Add your logic here
+    }
+
+    public void afterDelete(List<SObject> oldList, Map<Id, SObject> oldMap) {
+        // Add your logic here
+    }
+
+    public void afterUndelete(List<SObject> newList) {
+        // Add your logic here
+    }
+}

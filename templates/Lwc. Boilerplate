@@ -1,0 +1,67 @@
+import { LightningElement, api, track } from 'lwc';
+
+export default class LwcBoilerplate extends LightningElement {
+    // ----------------------
+    // Public properties
+    // ----------------------
+    @api recordId;     // Record Id passed from parent or Lightning page
+    @api objectApiName; // Object API name passed from Lightning page
+
+    // ----------------------
+    // Reactive state
+    // ----------------------
+    @track data = [];   // Example tracked property
+    @track isLoading = false;
+    @track error;
+
+    // ----------------------
+    // Lifecycle Hooks
+    // ----------------------
+    connectedCallback() {
+        console.log('Component Connected');
+        this.initData();
+    }
+
+    renderedCallback() {
+        console.log('Component Rendered');
+    }
+
+    disconnectedCallback() {
+        console.log('Component Disconnected');
+    }
+
+    // ----------------------
+    // Initialization
+    // ----------------------
+    initData() {
+        this.isLoading = true;
+        // Load default data or call Apex
+        // Example: this.loadData();
+        this.isLoading = false;
+    }
+
+    // ----------------------
+    // Event Handlers
+    // ----------------------
+    handleClick(event) {
+        console.log('Button clicked:', event.target.label);
+    }
+
+    handleChange(event) {
+        const fieldName = event.target.name;
+        const fieldValue = event.target.value;
+        console.log(`Changed ${fieldName} to ${fieldValue}`);
+    }
+
+    // ----------------------
+    // Utility Methods
+    // ----------------------
+    showToast(title, message, variant = 'info') {
+        const evt = new ShowToastEvent({
+            title: title,
+            message: message,
+            variant: variant
+        });
+        this.dispatchEvent(evt);
+    }
+}
