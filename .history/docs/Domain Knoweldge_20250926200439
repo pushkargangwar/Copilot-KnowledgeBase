@@ -21,7 +21,7 @@ Business Rules
 Email Requirements:
 Required field for all leads.
 Email must be unique
-For enterprise leads, email must end in 'telus.com' OR 'xavient.com'
+For enterprise leads, email must end in 'telus.com'
 
 Scoring Logic (Used for Qualification and Auto-Conversion):
 '+5' if 'Industry == 'Technology''
