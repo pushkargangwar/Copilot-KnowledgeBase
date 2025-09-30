@@ -1,17 +1,34 @@
-/**
- * @description       : 
- * @author            : ChangeMeIn@UserSettingsUnder.SFDoc
- * @group             : 
- * @last modified on  : 09-30-2025
- * @last modified by  : ChangeMeIn@UserSettingsUnder.SFDoc
-**/
 public with sharing class LeadValidationTriggerHandler {
 
     // ==========================
     // Public Methods
     // ==========================
 
-  
+    /**
+     * Bulk validate Lead emails
+     * @param leadList List of Lead records
+     */
+    public static void validateLeadEmail(List<Lead> leadList) {
+        Set<String> emailSet = new Set<String>();
+        for (Lead l : leadList) {
+            if (l.Email != null) emailSet.add(l.Email);
+        }
+
+        Map<String, Lead> existingLeadsMap = new Map<String, Lead>();
+        if (!emailSet.isEmpty()) {
+            for (Lead dbLead : [SELECT Id, Email FROM Lead WHERE Email IN :emailSet]) {
+                existingLeadsMap.put(dbLead.Email, dbLead);
+            }
+        }
+
+        for (Lead l : leadList) {
+            if (l.Email == null || !Pattern.matches('^[\\w._%+-]+@[\\w.-]+\\.[a-zA-Z]{2,6}$', l.Email)) {
+                l.addError('Email format is invalid.');
+            } else if (existingLeadsMap.containsKey(l.Email)) {
+                l.addError('This email is already in use.');
+            }
+        }
+    }
 
     /**
      * Bulk apply scoring rules to leads
@@ -65,7 +82,4 @@ public with sharing class LeadValidationTriggerHandler {
             this.errorCode = code;
         }
     }
-
-    //Write a method to get an account id as parameter and then utilize the docs/Domain knowledge.md to validate email as per the documetation 
-
 }
